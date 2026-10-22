@@ -32,9 +32,7 @@ jobs:
       # result from its output instead of its exit code.
       - name: Run unit tests
         run: |
-          set +e
-          build/tests/units2/unit_tests2 2>&1 | tee test-output.txt
-          set -e
+          build/tests/units2/unit_tests2 2>&1 | tee test-output.txt || true
           KNOWN=both_hmac_and_crc  # CRC+HMAC defect, see TODO at src/skylink_rx.c:144
           # Runner colors output even when piped; strip ANSI codes before parsing.
           plain=$(sed 's/\x1b\[[0-9;]*m//g' test-output.txt)
@@ -206,22 +204,14 @@ jobs:
           import re, sys
           from collections import Counter
 
-          DEFECTS = {
-              "src/mac.c [-Wtype-limits]": "sky_tick_t is uint32_t on FreeRTOS but int32_t on Linux; "
-                                           "clamp at mac.c peer_mac_remaining < 0 is dead on target.",
-              "src/mac.c [-Wsign-compare]": "Same root cause: unsigned sky_tick_t on target vs signed config fields.",
-              "src/reliable_vc.c [-Wsign-compare]": "Same root cause: unsigned sky_tick_t on target vs int32_t wrap_time_ticks().",
-              "src/utilities.c [-Wimplicit-function-declaration]": "abs() used without #include <stdlib.h>.",
-              "src/utilities.c [-Wbuiltin-declaration-mismatch]": "Follows from the missing <stdlib.h> include.",
-              "src/ext/blake3/blake3_dispatch.c [-Wunused-function]": "Vendored code, unused on non-x86.",
-          }
-          BASELINE = {
-              "src/mac.c [-Wtype-limits]": 1,
-              "src/mac.c [-Wsign-compare]": 5,
-              "src/reliable_vc.c [-Wsign-compare]": 2,
-              "src/utilities.c [-Wimplicit-function-declaration]": 1,
-              "src/utilities.c [-Wbuiltin-declaration-mismatch]": 1,
-              "src/ext/blake3/blake3_dispatch.c [-Wunused-function]": 1,
+          BASELINE = {  # group: (count, why)
+              "src/mac.c [-Wtype-limits]": (1, "sky_tick_t is uint32_t on FreeRTOS but int32_t on Linux; "
+                                               "clamp at mac.c peer_mac_remaining < 0 is dead on target."),
+              "src/mac.c [-Wsign-compare]": (5, "Same root cause: unsigned sky_tick_t on target vs signed config fields."),
+              "src/reliable_vc.c [-Wsign-compare]": (2, "Same root cause: unsigned sky_tick_t on target vs int32_t wrap_time_ticks()."),
+              "src/utilities.c [-Wimplicit-function-declaration]": (1, "abs() used without #include <stdlib.h>."),
+              "src/utilities.c [-Wbuiltin-declaration-mismatch]": (1, "Follows from the missing <stdlib.h> include."),
+              "src/ext/blake3/blake3_dispatch.c [-Wunused-function]": (1, "Vendored code, unused on non-x86."),
           }
 
           log = open("cross-report/warnings.log").read()
@@ -235,16 +225,16 @@ jobs:
 
           bad = False
           for key in sorted(BASELINE.keys() | found.keys()):
-              base, now = BASELINE.get(key, 0), found.get(key, 0)
+              (base, why), now = BASELINE.get(key, (0, "")), found.get(key, 0)
               if now > base:
                   bad = True
                   print(f"::error::{key}: {now} warnings, baseline {base}.")
               elif now < base:
                   print(f"::notice::{key}: {now} warnings, baseline {base}. Update BASELINE in ci.yml.")
               else:
-                  print(f"::warning::{key}: {now} known warnings. {DEFECTS.get(key, '')}".rstrip())
+                  print(f"::warning::{key}: {now} known warnings. {why}".rstrip())
           print(f"Summary: {sum(found.values())} warnings in {len(found)} groups, baseline "
-                f"{sum(BASELINE.values())} in {len(BASELINE)} groups")
+                f"{sum(n for n, _ in BASELINE.values())} in {len(BASELINE)} groups")
           sys.exit(1 if bad else 0)
           EOF
 
