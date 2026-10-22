@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/upload-artifact@v7
+      - uses: actions/checkout@v7
 
       # libzmq3-dev: CMakeLists.txt:16 does find_package(ZMQ REQUIRED) even
       # though the host build doesn't need it. Installed rather than fixed for now.
@@ -51,13 +51,13 @@ jobs:
           fi
           unexpected=$(grep -vx "$KNOWN" <<<"$failed" || true)
           if [ -n "$unexpected" ]; then
-            echo "::error::Unexpected test failures: $(echo $unexpected)"
+            echo "::error::Unexpected test failures: $(tr '\n' ' ' <<<"$unexpected")"
             exit 1
           fi
 
       - name: Upload test output
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unit-test-output
           path: test-output.txt
