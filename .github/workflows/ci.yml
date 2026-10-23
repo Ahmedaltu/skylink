@@ -169,8 +169,9 @@ jobs:
           EOF
           echo '/* stub: nothing needed without SKY_DEBUG */' > "$RUNNER_TEMP/stubs/SEGGER_RTT.h"
 
-      # Target: the real Aalto-3 MCU is UNVERIFIED. Cortex-M0 class is assumed
-      # from src/utilities.c:136 ("UHF processor doesn't have division instruction").
+      # Target: STM32L476VGTx (Cortex-M4F), confirmed by the Aalto-3 team.
+      # The "no division instruction" comment in src/utilities.c refers to older
+      # hardware, not Aalto-3.
       # No SKY_DEBUG: flight-like build. Sources come from src/CMakeLists.txt so
       # this list can't drift from the real build.
       - name: Compile
@@ -187,7 +188,7 @@ jobs:
           failed=0
           for f in $srcs; do
             mkdir -p "$obj/$(dirname "$f")"
-            arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -std=gnu11 -Os -Wall -Wextra \
+            arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -std=gnu11 -Os -Wall -Wextra \
               -ffunction-sections -fdata-sections \
               -Isrc -Iplatforms/freertos -I"$RUNNER_TEMP/stubs" \
               -c "src/$f" -o "$obj/${f%.c}.o" 2>>cross-report/warnings.log \
@@ -243,7 +244,7 @@ jobs:
         run: |
           cd "$RUNNER_TEMP/obj"
           {
-            echo "### arm-none-eabi object sizes (-Os, Cortex-M0)"
+            echo "### arm-none-eabi object sizes (-Os, Cortex-M4F, STM32L476)"
             echo "| file | text | data | bss |"
             echo "|---|--:|--:|--:|"
             find . -name '*.o' | sort | xargs arm-none-eabi-size -t \
